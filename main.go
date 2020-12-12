@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
 	. "github.com/sanditya12/rest-api/constants"
+	"golang.org/x/crypto/bcrypt"
 )
 
 //Date Struct
@@ -28,6 +29,7 @@ type Post struct {
 
 //User Struct
 type User struct {
+	ID       int    `json:"id"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -66,20 +68,31 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&user)
 	if user.Email == "" {
 		error.Message = "Email is Missing"
-		respondWithError(w, error)
+		resError(w, http.StatusBadRequest, error)
 	}
 	if user.Password == "" {
 		error.Message = "Password is Missing"
-		respondWithError(w, error)
+		resError(w, http.StatusBadRequest, error)
 	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(user.Password), 10)
+	checkErr(err)
+
+	user.Password = string(hashed)
+
+	queryBody := "insert into users (email, password) values($1,$2) RETURNING id;"
+
+	err = db.QueryRow(queryBody, user.Email, user.Password).Scan(&user.ID)
+	checkErr(err)
+	user.Password = ""
+
+	resJSON(w, user)
 }
 
 //PostsHandler return all posts
 func PostsHandler(w http.ResponseWriter, r *http.Request) {
 
-	// w.Header().Set("Content-Type", "application/json")
-
-	json.NewEncoder(w).Encode(posts)
+	resJSON(w, posts)
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +100,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	checkErr(err)
 	w.Header().Set("Content-Type", "application/json")
 
-	json.NewEncoder(w).Encode(posts[id])
+	resJSON(w, posts[id])
 }
 
 func addPost(w http.ResponseWriter, r *http.Request) {
@@ -96,13 +109,17 @@ func addPost(w http.ResponseWriter, r *http.Request) {
 
 	posts = append(posts, newPost)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(posts)
+	resJSON(w, posts)
 }
 
-func respondWithError(w http.ResponseWriter, error Error) {
-	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(error)
+func resJSON(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func resError(w http.ResponseWriter, status int, err Error) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(err)
 }
 
 func checkErr(err error) {
