@@ -1,36 +1,51 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/lib/pq"
+	. "github.com/sanditya12/rest-api/constants"
 )
 
 //Date Struct
 type Date struct {
-	Day   int
-	Month int
-	Year  int
+	Day   int `json:"day"`
+	Month int `json:"month"`
+	Year  int `json:"year"`
 }
 
 //Post Struct
 type Post struct {
-	Title      string
-	Body       string
-	UploadDate Date
+	Title      string `json:"title"`
+	Body       string `json:"body"`
+	UploadDate Date   `json:"uploadDate"`
 }
 
 var posts []Post
 
+var db *sql.DB
+
 func main() {
+	pgURL, err := pq.ParseURL(EsqlURL)
+	checkErr(err)
+
+	db, err = sql.Open("postgres", pgURL)
+	checkErr(err)
+
+	err = db.Ping()
+	checkErr(err)
+
 	r := mux.NewRouter()
 	r.HandleFunc("/api/posts", PostsHandler)
 	r.HandleFunc("/api/posts/{id}", postHandler)
 	r.HandleFunc("/api/add", addPost).Methods("POST")
 
-	http.ListenAndServe(":5000", r)
+	log.Fatal(http.ListenAndServe(":5000", r))
 }
 
 //PostsHandler return all posts
@@ -59,4 +74,8 @@ func addPost(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(posts)
 }
 
-// {"How To Sing", "Be Patient and Keep Calm, Don't Forget to Brush your Teeth.", Date{28, 8, 2002}}
+func checkErr(err error) {
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
