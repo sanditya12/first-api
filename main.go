@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
 	. "github.com/sanditya12/rest-api/constants"
@@ -58,6 +59,7 @@ func main() {
 	r.HandleFunc("/api/posts/{id}", postHandler)
 	r.HandleFunc("/api/add", addPost).Methods("POST")
 	r.HandleFunc("/api/signup", signup).Methods("POST")
+	r.HandleFunc("/api/login", login).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":5000", r))
 }
@@ -69,10 +71,12 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	if user.Email == "" {
 		error.Message = "Email is Missing"
 		resError(w, http.StatusBadRequest, error)
+		return
 	}
 	if user.Password == "" {
 		error.Message = "Password is Missing"
 		resError(w, http.StatusBadRequest, error)
+		return
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(user.Password), 10)
@@ -87,6 +91,50 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	user.Password = ""
 
 	resJSON(w, user)
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+	var user User
+	var error Error
+
+	json.NewDecoder(r.Body).Decode(&user)
+
+	if user.Email == "" {
+		error.Message = "Email is Missing"
+		resError(w, http.StatusBadRequest, error)
+		return
+	}
+	if user.Password == "" {
+		error.Message = "Password is Missing"
+		resError(w, http.StatusBadRequest, error)
+		return
+	}
+	queryBody := "select * from users where email=$1"
+	err := db.QueryRow(queryBody, user.Email).Scan(&user.ID, &user.Email, &user.Password)
+	if err == sql.ErrNoRows {
+		error.Message = "This Email is Not Registered Yet"
+		resError(w, http.StatusBadRequest, error)
+		return
+	} else {
+		checkErr(err)
+	}
+
+	resJSON(w, user)
+}
+
+func createToken(user User) (string, error) {
+	var err error
+	secret := SECRET
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": user.Email,
+		"iss":   "course",
+	})
+
+	tokenString, err := token.SignedString([]byte(secret))
+	checkErr(err)
+
+	return tokenString, nil
 }
 
 //PostsHandler return all posts
