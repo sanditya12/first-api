@@ -13,17 +13,28 @@ import (
 )
 
 //Date Struct
-type Date struct {
-	Day   int `json:"day"`
-	Month int `json:"month"`
-	Year  int `json:"year"`
-}
+// type Date struct {
+// 	Day   int `json:"day"`
+// 	Month int `json:"month"`
+// 	Year  int `json:"year"`
+// }
 
 //Post Struct
 type Post struct {
-	Title      string `json:"title"`
-	Body       string `json:"body"`
-	UploadDate Date   `json:"uploadDate"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	// UploadDate Date   `json:"uploadDate"`
+}
+
+//User Struct
+type User struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+//Error Struct
+type Error struct {
+	Message string `json:"message"`
 }
 
 var posts []Post
@@ -44,21 +55,36 @@ func main() {
 	r.HandleFunc("/api/posts", PostsHandler)
 	r.HandleFunc("/api/posts/{id}", postHandler)
 	r.HandleFunc("/api/add", addPost).Methods("POST")
+	r.HandleFunc("/api/signup", signup).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":5000", r))
+}
+
+func signup(w http.ResponseWriter, r *http.Request) {
+	var user User
+	var error Error
+	json.NewDecoder(r.Body).Decode(&user)
+	if user.Email == "" {
+		error.Message = "Email is Missing"
+		respondWithError(w, error)
+	}
+	if user.Password == "" {
+		error.Message = "Password is Missing"
+		respondWithError(w, error)
+	}
 }
 
 //PostsHandler return all posts
 func PostsHandler(w http.ResponseWriter, r *http.Request) {
 
-	w.Header().Set("Content-Type", "application/json")
+	// w.Header().Set("Content-Type", "application/json")
 
 	json.NewEncoder(w).Encode(posts)
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.Atoi(mux.Vars(r)["id"])
-	// fmt.Printf("%T",id)
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	checkErr(err)
 	w.Header().Set("Content-Type", "application/json")
 
 	json.NewEncoder(w).Encode(posts[id])
@@ -72,6 +98,11 @@ func addPost(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
+}
+
+func respondWithError(w http.ResponseWriter, error Error) {
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(error)
 }
 
 func checkErr(err error) {
