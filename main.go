@@ -35,6 +35,11 @@ type User struct {
 	Password string `json:"password"`
 }
 
+//JWT struct
+type JWT struct {
+	Token string `json:"token"`
+}
+
 //Error Struct
 type Error struct {
 	Message string `json:"message"`
@@ -96,6 +101,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 func login(w http.ResponseWriter, r *http.Request) {
 	var user User
 	var error Error
+	var jwt JWT
 
 	json.NewDecoder(r.Body).Decode(&user)
 
@@ -109,17 +115,27 @@ func login(w http.ResponseWriter, r *http.Request) {
 		resError(w, http.StatusBadRequest, error)
 		return
 	}
+	password := user.Password
 	queryBody := "select * from users where email=$1"
 	err := db.QueryRow(queryBody, user.Email).Scan(&user.ID, &user.Email, &user.Password)
 	if err == sql.ErrNoRows {
 		error.Message = "This Email is Not Registered Yet"
 		resError(w, http.StatusBadRequest, error)
 		return
-	} else {
-		checkErr(err)
 	}
+	checkErr(err)
 
-	resJSON(w, user)
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		error.Message = "Wrong Password"
+		resError(w, http.StatusBadRequest, error)
+		return
+	}
+	token, err := createToken(user)
+	checkErr(err)
+	jwt.Token = token
+
+	resJSON(w, jwt)
 }
 
 func createToken(user User) (string, error) {
